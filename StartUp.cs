@@ -38,6 +38,8 @@ namespace ARSoftware.NewPsdFilesNotifier.TrayApp
 
 			msgSender = new WhatsAppNotifier(settings);
 
+			BuildTrayIcon();
+
 			SetAppConfigs();
 		}
 
@@ -52,7 +54,7 @@ namespace ARSoftware.NewPsdFilesNotifier.TrayApp
 			{
 				ShowTrayNotification("Unidade não pronta", "Aguardando Google Drive estar disponível...", 4000);
 
-				return;
+				//return;
 			}
 
 			ProcessedFilesFolder = Path.Combine(pathToWatch, "PROCESSADOS");
@@ -65,7 +67,6 @@ namespace ARSoftware.NewPsdFilesNotifier.TrayApp
 			catch (FileNotFoundException)
 			{
 				ShowTrayNotification("Unidade não encontrada", "Aguardando Google Drive estar disponível...", 4000);
-				return;
 			}
 			catch (UnauthorizedAccessException) //Para drivers virtuais como Google Drive, OneDrive, etc., alguns diretórios não permitem a criação de subpastas.
 			{
@@ -73,45 +74,16 @@ namespace ARSoftware.NewPsdFilesNotifier.TrayApp
 					"Não foi possível criar a pasta PROCESSADOS. Verifique as permissões de escrita na pasta monitorada.",
 					"Erro de Configuração");
 
-				if (settings == null) return;
+				if (settings == null)
+				{
+
+					MessageBoxHelper.ShowWarning(
+					"Erro ao carregar suas configurações para o aplicativo.",
+					"Configuração");
+				}
 			}
 
-			// Criação do ícone da bandeja
-			notifyIcon = new NotifyIcon
-			{
-				Visible = true,
-				Text = "Monitor de Impressão PSD",
-				BalloonTipTitle = "Serviço de Impressão",
-				BalloonTipText = "Rodando em background."
-			};
-
-			using (var stream = new MemoryStream(Resources.PsdIcon))
-			{
-				notifyIcon.Icon = new Icon(stream);
-			}
-
-			// Menu de contexto
-			var contextMenu = new ContextMenuStrip();
-
-			var header = new ToolStripMenuItem("Print Manager v1.0.3.4") { Enabled = false };
-			contextMenu.Items.Add(header);
-
-			contextMenu.Items.Add(new ToolStripSeparator());
-
-			printNowStripe = new ToolStripMenuItem("Imprimir Agora", null, (s, e) => PrintFiles());
-			contextMenu.Items.Add(printNowStripe);
-			contextMenu.Items.Add("Timer Status", null, (s, e) => CheckStatus());
-
-			contextMenu.Items.Add(new ToolStripSeparator());
-
-			contextMenu.Items.Add("Configurações", null, (s, e) => OpenConfigForm());
-			contextMenu.Items.Add("Sair", null, (s, e) => Shutdown());
-
-			notifyIcon.ContextMenuStrip = contextMenu;
-
-			clientStatusTimer = new ST.Timer(600_000); // a cada 10 minutos
-			clientStatusTimer.Elapsed += (s, e) => HasFiles();
-			clientStatusTimer.AutoReset = true;
+			
 
 			try
 			{
@@ -133,6 +105,45 @@ namespace ARSoftware.NewPsdFilesNotifier.TrayApp
 			{
 				clientStatusTimer.Start();
 			}
+		}
+
+		private void BuildTrayIcon()
+		{
+			notifyIcon = new NotifyIcon
+			{
+				Visible = true,
+				Text = "Monitor de Impressão PSD",
+				BalloonTipTitle = "Serviço de Impressão",
+				BalloonTipText = "Rodando em background."
+			};
+
+			using (var stream = new MemoryStream(Resources.PsdIcon))
+			{
+				notifyIcon.Icon = new Icon(stream);
+			}
+
+			// Menu de contexto
+			var contextMenu = new ContextMenuStrip();
+
+			var header = new ToolStripMenuItem("Print Manager v1.0.4") { Enabled = false };
+			contextMenu.Items.Add(header);
+
+			contextMenu.Items.Add(new ToolStripSeparator());
+
+			printNowStripe = new ToolStripMenuItem("Imprimir Agora", null, (s, e) => PrintFiles());
+			contextMenu.Items.Add(printNowStripe);
+			contextMenu.Items.Add("Timer Status", null, (s, e) => CheckStatus());
+
+			contextMenu.Items.Add(new ToolStripSeparator());
+
+			contextMenu.Items.Add("Configurações", null, (s, e) => OpenConfigForm());
+			contextMenu.Items.Add("Sair", null, (s, e) => Shutdown());
+
+			notifyIcon.ContextMenuStrip = contextMenu;
+
+			clientStatusTimer = new ST.Timer(600_000); // a cada 10 minutos
+			clientStatusTimer.Elapsed += (s, e) => HasFiles();
+			clientStatusTimer.AutoReset = true;
 		}
 
 		private AppSettings LoadAndEnsureSettings()
@@ -166,16 +177,16 @@ namespace ARSoftware.NewPsdFilesNotifier.TrayApp
 		private void OpenConfigForm()
 		{
 			FormInvoker.ShowForm(new ConfigurationForm(), true);
-			
+
 			LoadAndEnsureSettings();
 		}
 
 		private void OnFileManaged(object sender, FileSystemEventArgs e)
 		{
 			// Só notifica a cada 10 minutos para evitar "spam", caso o usuário vá adicionando arquivos a conta gotas.
-			if (lastNotificationTime.Date != DateTime.MinValue && (lastNotificationTime.AddMinutes(10) > DateTime.Now))  return; 
+			if (lastNotificationTime.Date != DateTime.MinValue && (lastNotificationTime.AddMinutes(10) > DateTime.Now)) return;
 
-			if (!clientStatusTimer.Enabled) 
+			if (!clientStatusTimer.Enabled)
 			{
 				ShowTrayNotification("Novo(s) PSD detectado(s)", "🖨️ Novo(s) arquivo(s) encontrado(s) para impressão.", 4000);
 				msgSender.SendWhatsupMessage("Novos PSD detectados");
@@ -400,10 +411,14 @@ namespace ARSoftware.NewPsdFilesNotifier.TrayApp
 
 		void ShowTrayNotification(string title, string message, int timeout)
 		{
+			if (notifyIcon == null) BuildTrayIcon();
+
 			notifyIcon.BalloonTipTitle = title;
 			notifyIcon.BalloonTipText = message;
 			notifyIcon.ShowBalloonTip(timeout);
 		}
+
+
 
 		private static bool IsDirectoryReady(string path)
 		{
@@ -442,15 +457,11 @@ namespace ARSoftware.NewPsdFilesNotifier.TrayApp
 
 		private void Shutdown()
 		{
-
 			this.Dispose();
-
 		}
 
 		public void Dispose()
 		{
-
-
 			if (watcher != null)
 			{
 				watcher.EnableRaisingEvents = false;
